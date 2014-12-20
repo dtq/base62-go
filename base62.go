@@ -1,51 +1,78 @@
-package main
+package base62
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
-	"time"
 )
 
 var b62Alph = []rune("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
-var b62len = big.NewInt(62)
-var runeMap = make(map[rune]int)
+var b62len = intToBig(len(b62Alph))
+var runeMap = make(map[rune]*big.Int)
 
 func init() {
-	// Initialize the map of each rune to it's index value
+	// Initialize the map of each rune to its index value
 	for i, c := range b62Alph {
-		runeMap[c] = i
+		runeMap[c] = intToBig(i)
 	}
 }
 
-func b62encode(num *big.Int) string {
+// EncodeBig takes a big.Int and returns a base62 encoded string
+func EncodeBig(num *big.Int) (senc string, err error) {
 	var encoding []rune
+	rslt := new(big.Int)
+	rslt.Set(num)
 	rem := big.NewInt(0)
 	zero := big.NewInt(0)
 
-	for num.Cmp(zero) > 0 {
-		num.DivMod(num, b62len, rem)
+	if num.Cmp(zero) == 0 { // equals zero
+		return string(b62Alph[0]), nil
+	}
+	if num.Cmp(zero) == -1 { // is negative
+		return "", fmt.Errorf("base62: negative number %q", num)
+	}
+
+	for rslt.Cmp(zero) > 0 {
+		rslt.DivMod(rslt, b62len, rem)
 		r := b62Alph[rem.Int64()]
 		encoding = append([]rune{r}, encoding...)
 	}
-	return string(encoding)
-
+	return string(encoding), nil
 }
 
-func divmod(a *big.Int, b *big.Int) (*big.Int, *big.Int) {
-	return a.DivMod(a, b, nil)
+// EncodeStr takes a string representation of an integer (like "150") and returns
+// a base62 encoded string
+func EncodeStr(s string) (senc string, err error) {
+	if s == "" {
+		return "", errors.New("base62: empty string")
+	}
+	num := strToBig(s)
+	return EncodeBig(num)
 }
 
-func main() {
-	start := time.Now()
-	var b62 string
-
-	num := new(big.Int)
-
-	for i := 0; i < 1000000; i++ {
-		fmt.Sscan("280997858289516668860144855962706392315", num)
-		b62 = b62encode(num)
+func Decode(s string) (num *big.Int, err error) {
+	num = new(big.Int)
+	if s == "" {
+		return num, errors.New("base62: empty string")
 	}
 
-	fmt.Println(time.Since(start))
-	fmt.Println(b62)
+	for _, c := range s {
+		num.Mul(num, b62len)
+		num.Add(num, runeMap[c])
+	}
+
+	return num, nil
+}
+
+// strToBig takes a string representation of an integer (like "123") and returns a pointer
+// to big.Int
+func strToBig(s string) *big.Int {
+	num := new(big.Int)
+	fmt.Sscan(s, num)
+	return num
+}
+
+// intToBig takes an int and returns a pointer to big.Int
+func intToBig(num int) *big.Int {
+	return big.NewInt(int64(num))
 }
